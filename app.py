@@ -1,7 +1,7 @@
 from pathlib import Path
 import traceback
 import uvicorn
-
+import asyncio
 from fastapi import FastAPI,Request
 from fastapi.responses import HTMLResponse,JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,8 +10,8 @@ from pydantic import BaseModel
 
 from backend import run_travel_agent
 # this is to allow nested event loops for async calls in FastAPI.
-import nest_asyncio
-nest_asyncio.apply()
+# import nest_asyncio
+# nest_asyncio.apply()
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -59,10 +59,12 @@ async def travel_planner(request_data: TravelRequest):
                     "error": "Message cannot be empty."
                 }
             )
-
-        result = run_travel_agent(
-            user_input=user_message,
-            thread_id=request_data.thread_id
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            run_travel_agent,
+            user_message,
+            request_data.thread_id
         )
 
         return JSONResponse(
