@@ -4,7 +4,8 @@
 # from backend import run_travel_agent
 import asyncio
 # from mcp_client_test import get_all_tools
-from mcp_client_test import tavily_mcp_search
+# from mcp_client_test import tavily_mcp_search
+from mcp_client import get_all_tools
 
 
 # # Test -01
@@ -26,6 +27,10 @@ from mcp_client_test import tavily_mcp_search
 # print("\n FINAL RESPONSE : \n")
 # print(response["answer"])
 
+# if __name__ == "__main__":
+#     # query = "latest nes about AI"
+#     asyncio.run(tavily_mcp_search(query))
+
 if __name__ == "__main__":
-    query = "latest nes about AI"
-    asyncio.run(tavily_mcp_search(query))
+    # query = "latest nes about AI"
+    asyncio.run(get_all_tools())
