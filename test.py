@@ -5,7 +5,7 @@
 import asyncio
 # from mcp_client_test import get_all_tools
 # from mcp_client_test import tavily_mcp_search
-from mcp_client import get_all_tools
+from mcp_client_test import get_all_tools,tavily_mcp_search
 
 
 # # Test -01
@@ -27,10 +27,10 @@ from mcp_client import get_all_tools
 # print("\n FINAL RESPONSE : \n")
 # print(response["answer"])
 
+if __name__ == "__main__":
+    query = "latest nes about AI"
+    asyncio.run(tavily_mcp_search(query))
+
 # if __name__ == "__main__":
 #     # query = "latest nes about AI"
-#     asyncio.run(tavily_mcp_search(query))
-
-if __name__ == "__main__":
-    # query = "latest nes about AI"
-    asyncio.run(get_all_tools())
+#     asyncio.run(get_all_tools())
