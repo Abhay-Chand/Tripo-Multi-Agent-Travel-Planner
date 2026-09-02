@@ -1,4 +1,4 @@
-import os
+import os 
 import certifi
 from dotenv import load_dotenv
 
@@ -7,25 +7,23 @@ load_dotenv()
 os.environ["SSL_CERT_FILE"] = certifi.where()
 os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 
-from typing import TypedDict,Annotated
+from typing import TypedDict, Annotated
 import operator
 import uuid
-import asyncio
+
 import psycopg
 from psycopg.rows import dict_row
 
-from langgraph.graph import StateGraph, START,END
+from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.postgres import PostgresSaver
-
-from langchain.messages import (
+from langchain_core.messages import (
     AnyMessage,
     HumanMessage,
     AIMessage,
-    SystemMessage
+    SystemMessage,
 )
 from langchain_groq import ChatGroq
-# from tools.tavily_tool import tavily_search
-from mcp_client_test import tavily_mcp_search
+from tools.tavily_tool import tavily_search
 from tools.flight_tool import search_flights
 
 
@@ -34,51 +32,50 @@ def get_database_url():
 
     if not database_url:
         raise ValueError(
-            "DATABASE_URL is missing. Please add your PostgreSQL URL to the .env file."
+            "DATABASE_URL is missing. Please add your Render PostgreSQL External Database URL to .env"
         )
 
-    # Ensure SSL is enabled for hosted PostgreSQL providers (e.g. Render)
     if "sslmode=" not in database_url:
         separator = "&" if "?" in database_url else "?"
         database_url = f"{database_url}{separator}sslmode=require"
 
     return database_url
 
-# import psycopg
-
-# try:
-#     conn = psycopg.connect(get_database_url())
-#     print("PostgreSQL connection successful!")
-#     conn.close()
-# except Exception as e:
-#     print(f"PostgreSQL connection failed: {e}")
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY is missing. Please add it to you .env file.")
+    raise ValueError("GROQ_API_KEY is missing. Please add it to your .env file.")
 
 
+# =========================
+# LLM
+# =========================
 
 llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
+    model="openai/gpt-oss-120b",
     api_key=GROQ_API_KEY
 )
 
-# How making state for the Langgraph 
-# state 
+
+# =========================
+# State
+# =========================
 
 class TravelState(TypedDict):
-    messages : Annotated[list[AnyMessage], operator.add]
+    messages: Annotated[list[AnyMessage], operator.add]
     user_query: str
-    flight_results:str
-    hotel_results:str
-    itinerary:str
-    llm_calls:int
+    flight_results: str
+    hotel_results: str
+    itinerary: str
+    llm_calls: int
 
-# flight Agent
+
+# =========================
+# Flight Agent
+# =========================
+
 def flight_agent(state: TravelState):
     query = state["user_query"]
-
     flight_data = search_flights(query)
 
     return {
@@ -86,17 +83,18 @@ def flight_agent(state: TravelState):
         "messages": [
             AIMessage(content="Flight results fetched.")
         ],
-        "llm_calls": state.get("llm_calls", 0) + 1,
+        "llm_calls": state.get("llm_calls", 0) + 1
     }
 
 
+
+# =========================
 # Hotel Agent
+# =========================
 
 def hotel_agent(state: TravelState):
     query = f"Best hotels for {state['user_query']}"
-
-    # hotel_results = tavily_search(query)
-    hotel_results = asyncio.run(tavily_mcp_search(query))
+    hotel_results = tavily_search(query)
 
     return {
         "hotel_results": hotel_results,
@@ -107,9 +105,11 @@ def hotel_agent(state: TravelState):
     }
 
 
-# ============================
+
+
+# =========================
 # Itinerary Agent
-# ============================
+# =========================
 
 def itinerary_agent(state: TravelState):
     prompt = f"""
@@ -140,9 +140,9 @@ Make the itinerary practical, budget-aware, and easy to follow.
 
 
 
-# ============================
+# =========================
 # Final Response Agent
-# ============================
+# =========================
 
 def final_agent(state: TravelState):
     final_prompt = f"""
@@ -171,14 +171,12 @@ Format the final answer beautifully using these sections:
 
 Important:
 - Be clear and practical.
-- Mention that live flight APIs may not provide ticket prices if pricing is unavailable.
+- Mention that live flight API may not provide ticket prices if pricing is unavailable.
 - Keep the response useful for real travel planning.
 """
 
     response = llm.invoke([
-        SystemMessage(
-            content="You are a professional AI travel booking assistant as well as full trip planner "
-        ),
+        SystemMessage(content="You are a professional AI travel booking assistant."),
         HumanMessage(content=final_prompt)
     ])
 
@@ -188,28 +186,30 @@ Important:
     }
 
 
-
+# =========================
 # Build Graph
+# =========================
 
 graph = StateGraph(TravelState)
 
 graph.add_node("flight_agent", flight_agent)
 graph.add_node("hotel_agent", hotel_agent)
-graph.add_node("itinerary_agent",itinerary_agent)
-graph.add_node("final_agent",final_agent)
+graph.add_node("itinerary_agent", itinerary_agent)
+graph.add_node("final_agent", final_agent)
 
-graph.add_edge(START,"flight_agent")
-graph.add_edge("flight_agent","hotel_agent")
-graph.add_edge("hotel_agent","itinerary_agent")
-graph.add_edge("itinerary_agent","final_agent")
-graph.add_edge("final_agent",END)
+graph.add_edge(START, "flight_agent")
+graph.add_edge("flight_agent", "hotel_agent")
+graph.add_edge("hotel_agent", "itinerary_agent")
+graph.add_edge("itinerary_agent", "final_agent")
+graph.add_edge("final_agent", END)
 
 
+# =========================
 # PostgreSQL Checkpointer
-
+# =========================
 DATABASE_URL = get_database_url()
 
-_conn =  psycopg.connect(
+_conn = psycopg.connect(
     DATABASE_URL,
     autocommit=True,
     row_factory=dict_row
@@ -221,18 +221,12 @@ checkpointer.setup()
 travel_graph = graph.compile(checkpointer=checkpointer)
 
 
-# =======================================
+
+# =========================
 # Function for FastAPI
-# =======================================
+# =========================
 
-# ============================
-# Run Travel Agent
-# ============================
-
-def run_travel_agent(
-    user_input: str,
-    thread_id: str | None = None
-):
+def run_travel_agent(user_input: str, thread_id: str | None = None):
     if not thread_id:
         thread_id = f"user_{uuid.uuid4().hex}"
 
@@ -264,5 +258,5 @@ def run_travel_agent(
         "flight_results": result.get("flight_results", ""),
         "hotel_results": result.get("hotel_results", ""),
         "itinerary": result.get("itinerary", ""),
-        "llm_calls": result.get("llm_calls", 0)
+        "llm_calls": result.get("llm_calls", 0),
     }

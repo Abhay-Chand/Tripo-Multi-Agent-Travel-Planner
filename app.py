@@ -1,25 +1,23 @@
 from pathlib import Path
 import traceback
 import uvicorn
-import asyncio
-from fastapi import FastAPI,Request
-from fastapi.responses import HTMLResponse,JSONResponse
+
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from backend import run_travel_agent
-# this is to allow nested event loops for async calls in FastAPI.
-# import nest_asyncio
-# nest_asyncio.apply()
 
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(
-    title="Tripo",
-    description="Tripo is a Langchain Multi-Agent Travelling Planner all over the World With the FastAPI Frontend",
+    title="TripMate AI",
+    description="LangGraph Multi-Agent Travel Planner with FastAPI Frontend",
     version="1.0.0"
 )
+
 
 app.mount(
     "/static",
@@ -27,16 +25,19 @@ app.mount(
     name="static"
 )
 
+
 templates = Jinja2Templates(
     directory=str(BASE_DIR / "templates")
 )
+
+
 
 class TravelRequest(BaseModel):
     message: str
     thread_id: str | None = None
 
 
-# Default Route : while visiting in the page it launch my html page first
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse(
@@ -59,12 +60,10 @@ async def travel_planner(request_data: TravelRequest):
                     "error": "Message cannot be empty."
                 }
             )
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            run_travel_agent,
-            user_message,
-            request_data.thread_id
+
+        result = run_travel_agent(
+            user_input=user_message,
+            thread_id=request_data.thread_id
         )
 
         return JSONResponse(
@@ -75,7 +74,7 @@ async def travel_planner(request_data: TravelRequest):
                 "flight_results": result["flight_results"],
                 "hotel_results": result["hotel_results"],
                 "itinerary": result["itinerary"],
-                "llm_calls": result["llm_calls"]
+                "llm_calls": result["llm_calls"],
             }
         )
 
@@ -92,17 +91,19 @@ async def travel_planner(request_data: TravelRequest):
         )
 
 
+
 @app.get("/health")
 async def health_check():
     return {
         "status": "ok",
-        "message": "Tripo  API is running"
+        "message": "AI Travel Planner API is running"
     }
 
 
 @app.get("/favicon.ico")
 async def favicon():
     return JSONResponse(content={})
+
 
 
 if __name__ == "__main__":
